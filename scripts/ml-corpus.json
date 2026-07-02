@@ -1,0 +1,120 @@
+{
+  "scaffolds": [
+    {
+      "request": "Train a scikit-learn classifier on the iris dataset with cross-validation and report accuracy against a baseline",
+      "kind": "classical-ml",
+      "torch": false,
+      "checkBaseline": true,
+      "primaryGoal": "max"
+    },
+    {
+      "request": "Simulate a damped oscillator numerically and plot the signal",
+      "kind": "numerical",
+      "torch": false,
+      "checkBaseline": false,
+      "primaryGoal": "max"
+    },
+    {
+      "request": "Build an evaluation harness with a baseline ladder and a leakage check",
+      "kind": "eval-harness",
+      "torch": false,
+      "checkBaseline": true,
+      "primaryGoal": "max"
+    },
+    {
+      "request": "Fine-tune a model with LoRA adapters on a frozen base",
+      "kind": "peft-finetune",
+      "torch": true,
+      "checkBaseline": true,
+      "primaryGoal": "max"
+    },
+    {
+      "request": "Quantize a model to int8 for faster inference",
+      "kind": "quantized-inference",
+      "torch": true,
+      "checkBaseline": true,
+      "primaryGoal": "max"
+    },
+    {
+      "request": "Distill a teacher model into a smaller student",
+      "kind": "distillation",
+      "torch": true,
+      "checkBaseline": true,
+      "primaryGoal": "max"
+    },
+    {
+      "request": "Train a tiny recursive model on a grid puzzle with exact-match eval",
+      "kind": "trm",
+      "torch": true,
+      "checkBaseline": true,
+      "primaryGoal": "max"
+    },
+    {
+      "request": "Serve a small language model and evaluate greedy generation",
+      "kind": "inference-eval",
+      "torch": true,
+      "checkBaseline": true,
+      "primaryGoal": "max"
+    },
+    {
+      "request": "Build a tiny chat language model that learns when to spend more recurrent depth; serve text generation and run an optimization step plus an integration smoke test",
+      "kind": "inference-eval",
+      "torch": true,
+      "selectionOnly": true,
+      "_note": "heuristic guard: dominant inference signal wins; an incidental 'optimization'/'integration' must NOT route to the numerical sim stub (the project-20260617115953 regression)"
+    },
+    {
+      "request": "Run a Monte Carlo simulation of an ODE system and process the signal",
+      "kind": "numerical",
+      "torch": false,
+      "selectionOnly": true,
+      "_note": "heuristic guard: a genuinely numerical prompt still scores highest on the numerical net"
+    }
+  ],
+  "degradation": [
+    {
+      "request": "Fine-tune a model with LoRA adapters",
+      "torch": false,
+      "kind": "classical-ml",
+      "degradedFrom": "peft-finetune"
+    }
+  ],
+  "vram": [
+    {
+      "name": "70B fine-tune on an 8GB GPU is refused (no OOM)",
+      "paramsMillions": 70000,
+      "precision": "fp16",
+      "batchSize": 4,
+      "seqLen": 2048,
+      "training": true,
+      "trainableFraction": 1,
+      "optimizer": "adamw",
+      "budgetMb": 8192,
+      "expect": "refuse"
+    },
+    {
+      "name": "A 50M model fits within an 8GB budget",
+      "paramsMillions": 50,
+      "precision": "fp16",
+      "batchSize": 8,
+      "seqLen": 512,
+      "training": true,
+      "trainableFraction": 1,
+      "optimizer": "adamw",
+      "budgetMb": 8192,
+      "expect": "ok"
+    },
+    {
+      "name": "A 2B QLoRA run with a large batch auto-downshifts to fit",
+      "paramsMillions": 2000,
+      "precision": "int4",
+      "batchSize": 24,
+      "seqLen": 2048,
+      "training": true,
+      "trainableFraction": 0.005,
+      "optimizer": "adamw",
+      "budgetMb": 8000,
+      "expect": "downshift"
+    }
+  ]
+}

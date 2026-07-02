@@ -1,0 +1,64 @@
+{
+  "scripts": {
+    "dev": "node scripts/start-app.mjs dev",
+    "dev:all": "node scripts/dev-all.mjs",
+    "build": "next build",
+    "start": "node scripts/start-app.mjs start",
+    "telegram": "node scripts/telegram-control-worker.mjs",
+    "telegram:pair": "node scripts/telegram-pairing-code.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "validate:ml": "node scripts/validate-ml.mjs",
+    "validate:data": "node scripts/validate-data-ingest.mjs",
+    "validate:chart": "node scripts/validate-metric-chart.mjs",
+    "reset": "node scripts/reset-data.mjs"
+  },
+  "dependencies": {
+    "@types/node": "25.9.3",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "16.2.6",
+    "grammy": "^1.38.4",
+    "jszip": "^3.10.1",
+    "next": "16.2.6",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "author": {
+    "name": "Maxim Bespalov",
+    "url": "https://github.com/Antibody/Agentic-Control-Freak"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Antibody/Agentic-Control-Freak.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Antibody/Agentic-Control-Freak/issues"
+  },
+  "homepage": "https://github.com/Antibody/Agentic-Control-Freak#readme",
+  "license": "MIT",
+  "keywords": [
+    "agentic-control",
+    "closed-dev-loop",
+    "coding-agents",
+    "codex",
+    "claude-code",
+    "nextjs",
+    "orchestration",
+    "workspace-preview",
+    "verification",
+    "local-first"
+  ],
+  "private": true,
+  "name": "agentic-control-freak",
+  "version": "0.0.1",
+  "description": "Local Next.js-based control plane for closed-loop coding-agent orchestration, approvals, verification, previews, and durable generated workspaces."
+}

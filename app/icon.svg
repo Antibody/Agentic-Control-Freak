@@ -1,0 +1,131 @@
+<svg class="acf-mark" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" role="img" aria-labelledby="acfMarkTitle">
+  <title id="acfMarkTitle">Agentic Control Freak</title>
+
+  <style>
+    .acf-mark {
+      --acf-bg: #f3f5f8;
+      --acf-surface: #ffffff;
+      --acf-border: #cbd5e1;
+      --acf-muted: #64748b;
+      --acf-ink: #0f172a;
+      --acf-accent: #5b63d9;
+      --acf-verify: #0f766e;
+
+      display: inline-block;
+      vertical-align: -0.18em;
+      overflow: visible;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .acf-mark {
+        --acf-bg: #111827;
+        --acf-surface: #151b2b;
+        --acf-border: #2b3447;
+        --acf-muted: #94a3b8;
+        --acf-ink: #eef2ff;
+        --acf-accent: #818cf8;
+        --acf-verify: #2dd4bf;
+      }
+    }
+
+    :where(.dark, [data-theme="dark"], [data-color-mode="dark"]) .acf-mark {
+      --acf-bg: #111827;
+      --acf-surface: #151b2b;
+      --acf-border: #2b3447;
+      --acf-muted: #94a3b8;
+      --acf-ink: #eef2ff;
+      --acf-accent: #818cf8;
+      --acf-verify: #2dd4bf;
+    }
+
+    :where(.light, [data-theme="light"], [data-color-mode="light"]) .acf-mark {
+      --acf-bg: #f3f5f8;
+      --acf-surface: #ffffff;
+      --acf-border: #cbd5e1;
+      --acf-muted: #64748b;
+      --acf-ink: #0f172a;
+      --acf-accent: #5b63d9;
+      --acf-verify: #0f766e;
+    }
+
+    .acf-mark__orbit {
+      animation: acf-orbit 7.5s linear infinite;
+    }
+
+    .acf-mark__cursor {
+      animation: acf-cursor 1.6s ease-in-out infinite;
+    }
+
+    @keyframes acf-orbit {
+      to {
+        stroke-dashoffset: 100;
+      }
+    }
+
+    @keyframes acf-cursor {
+      0%, 42%, 100% {
+        opacity: 1;
+      }
+
+      62%, 82% {
+        opacity: 0.34;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .acf-mark__orbit,
+      .acf-mark__cursor {
+        animation: none;
+      }
+    }
+  </style>
+
+  <circle cx="12" cy="12" r="10" fill="var(--acf-bg)" stroke="var(--acf-border)" stroke-width="1.25"/>
+
+  <circle
+    class="acf-mark__orbit"
+    cx="12"
+    cy="12"
+    r="10"
+    fill="none"
+    stroke="var(--acf-accent)"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-dasharray="18 82"
+    stroke-dashoffset="0"
+    pathLength="100"
+  />
+
+  <rect x="6.75" y="7" width="10.5" height="10" rx="2.25" fill="var(--acf-surface)" stroke="var(--acf-border)" stroke-width="1"/>
+
+  <path
+    d="M9.1 10.1 L10.8 12 L9.1 13.9"
+    fill="none"
+    stroke="var(--acf-ink)"
+    stroke-width="1.45"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <path
+    class="acf-mark__cursor"
+    d="M12.35 14.05 H14.95"
+    fill="none"
+    stroke="var(--acf-muted)"
+    stroke-width="1.45"
+    stroke-linecap="round"
+  />
+
+  <path
+    d="M12.85 10.65 L14.05 11.85 L15.45 10.1"
+    fill="none"
+    stroke="var(--acf-verify)"
+    stroke-width="1.35"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <rect x="11" y="2.5" width="2" height="2" rx="0.55" fill="var(--acf-accent)"/>
+  <rect x="19.5" y="11" width="2" height="2" rx="0.55" fill="var(--acf-muted)"/>
+  <rect x="11" y="19.5" width="2" height="2" rx="0.55" fill="var(--acf-verify)"/>
+</svg>
