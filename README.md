@@ -5,7 +5,7 @@ A local web control plane for orchestrating coding agents  - Codex CLI, Claude C
 ACF is a Next.js app that runs on your machine and coordinates coding-agent work in isolated generated workspaces. It gives you a browser UI for sending a request, reviewing a durable implementation plan, reverting changes, forking conversations, running verification, and previewing the generated result.
 
 <p align="center">
-![Agentic Control Freak Intro](ACF-intro.gif)
+  <img src="./ACF-intro.gif" alt="Agentic Control Freak Intro" width="800" />
 </p>
 
 ## TL;DR
