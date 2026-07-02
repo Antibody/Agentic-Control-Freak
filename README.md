@@ -3,9 +3,9 @@
 A local web control plane for orchestrating coding agents  - Codex CLI, Claude Code, Google Antigravity (AGY), or local Ollama models: plan, approve, execute, verify, preview, and inspect generated web, Python, R, or ML projects. One can **switch** between agents **without loosing context** while building.
 
 ACF is a Next.js app that runs on your machine and coordinates coding-agent work in isolated generated workspaces. It gives you a browser UI for sending a request, reviewing a durable implementation plan, reverting changes, forking conversations, running verification, and previewing the generated result.
-
+<p align="center">
 ![Agentic Control Freak Intro](ACF-intro.gif)
-
+</p>
 ## TL;DR
 Install the local prerequisites first: Node.js `20.9+`, npm/pnpm, and at least one authenticated coding provider: Codex CLI, Claude Code, Google Antigravity (`agy`), or Ollama with a pulled local model. If CLI install is fresh, authenticate with them first. **Optional:** Also install the runtime/toolchain for the kind of project you want ACF to build and verify: Python for Python scripts and ML, .NET SDK for C#/ASP.NET, Java/JDK for Java projects, R for R/Shiny, and the relevant package managers for Node/Python stacks.
 
