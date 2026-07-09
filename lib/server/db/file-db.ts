@@ -438,6 +438,7 @@ function normalizeDatabase(db: AppDatabase): AppDatabase {
   }
   for (const plan of db.plans ?? []) {
     plan.approvalCheckpointId ??= null;
+    plan.deliveryContract ??= null;
   }
   for (const run of db.agentRuns ?? []) {
     run.codexThreadId ??= null;

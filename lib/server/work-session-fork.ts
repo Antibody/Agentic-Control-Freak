@@ -322,6 +322,9 @@ export async function forkWorkSession(input: {
           status: "approved",
           planMarkdown: prepared.sourcePlan.planMarkdown,
           planJson: JSON.parse(JSON.stringify(prepared.sourcePlan.planJson)) as PlanRecord["planJson"],
+          deliveryContract: prepared.sourcePlan.deliveryContract === null
+            ? null
+            : JSON.parse(JSON.stringify(prepared.sourcePlan.deliveryContract)) as PlanRecord["deliveryContract"],
           createdByAgent: prepared.sourcePlan.createdByAgent,
           approvedAt: createdAt,
           approvalCheckpointId: null,

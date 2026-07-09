@@ -22,7 +22,7 @@ import { traced } from "@/lib/server/tracing";
 import { assertSafeWorkspace } from "@/lib/server/workspace-safety";
 import { classifyProductIntent, isPlainStaticWebPageRequest, isSingleFileHtmlRequest, validateRequestIntentCoverage } from "@/lib/shared/request-intent";
 import { filterBuildVerificationCommands, isBuildVerificationCommand, userExplicitlyRequestedBuildVerification } from "@/lib/shared/verification-commands";
-import type { Identifier, StackDecision, VerificationCommandResult, VerificationFailureKind, WorkSessionRecord } from "@/lib/shared/types";
+import type { DeliveryContract, Identifier, StackDecision, VerificationCommandResult, VerificationFailureKind, WorkSessionRecord } from "@/lib/shared/types";
 
 export type VerificationPhase = "workspace" | "install" | "command" | "package_imports" | "structural" | "functional" | "geometry" | "visual";
 
@@ -37,6 +37,7 @@ interface VerificationProgressContext {
   workSessionId: Identifier;
   verificationRunId?: Identifier;
   planId?: Identifier;
+  deliveryContract?: DeliveryContract | null;
 }
 
 const javaVerificationClassesDir = path.join(".orchestrator", "java-verify-classes");
@@ -1674,6 +1675,7 @@ function primaryHtmlSource(fileSources: Map<string, string>): { file: string; so
 async function runRequestIntentVerification(input: {
   workspacePath: string;
   userRequest: string;
+  deliveryContract?: DeliveryContract | null;
 }): Promise<{ failed: boolean; output: string; checks: VerificationCheck[] } | null> {
   const files = await collectIntentSourceFiles(input.workspacePath);
   if (files.length === 0) {
@@ -1687,7 +1689,8 @@ async function runRequestIntentVerification(input: {
   }
 
   const failures = [...coverage.messages];
-  if (coverage.profile.singleFileHtml) {
+  const expectsSingleFileHtml = input.deliveryContract?.artifactShape === "single-file-html" || coverage.profile.singleFileHtml;
+  if (expectsSingleFileHtml) {
     const primaryHtml = primaryHtmlSource(fileSources);
     if (primaryHtml === null) {
       failures.push("The request asked for a single-file HTML result, but no primary HTML source file was found.");
@@ -1717,6 +1720,7 @@ export async function runStructuralVerification(input: {
   packageJson: Record<string, unknown> | null;
   userRequest: string;
   stackDecision?: StackDecision | null;
+  deliveryContract?: DeliveryContract | null;
 }): Promise<{ failed: boolean; output: string; checks: VerificationCheck[] } | null> {
   const workspacePath = input.workspacePath;
   const serverPath = path.join(workspacePath, "src", "server.js");
@@ -1738,7 +1742,9 @@ export async function runStructuralVerification(input: {
   const hasPublicDir = await directoryExists(publicDir);
   const hasRootStaticHtml = await fileExists(path.join(workspacePath, "index.html"));
   const rootHtmlIsBundlerEntry = hasRootStaticHtml && workspaceUsesBundledHtmlEntry(input.packageJson);
-  const expectsSingleFileHtml = isSingleFileHtmlRequest(input.userRequest);
+  const contract = input.deliveryContract ?? null;
+  const expectsSingleFileHtml = contract?.artifactShape === "single-file-html" || isSingleFileHtmlRequest(input.userRequest);
+  const expectsRootStaticAssets = contract?.artifactShape === "root-html-css-js" || (contract === null && !expectsSingleFileHtml);
   const decision = input.stackDecision ?? null;
   const expectsPlainStaticPage = decision !== null
     ? decision.stack === "static-html"
@@ -1869,10 +1875,10 @@ export async function runStructuralVerification(input: {
       if (expectsSingleFileHtml) {
         check(!referencesSharedCss, `${page.file} does not reference /styles.css because the request asks for a single-file HTML result.`);
         check(!referencesSharedScript, `${page.file} does not reference /script.js because the request asks for a single-file HTML result.`);
-      } else if (hasSharedCss) {
+      } else if (expectsRootStaticAssets && hasSharedCss) {
         check(referencesSharedCss, `${page.file} references /styles.css.`);
       }
-      if (!expectsSingleFileHtml && hasSharedScript) {
+      if (expectsRootStaticAssets && hasSharedScript) {
         check(referencesSharedScript, `${page.file} references /script.js.`);
       }
       if (expectsNavigation) {
@@ -1891,10 +1897,10 @@ export async function runStructuralVerification(input: {
       pass("public/styles.css exists.");
       if (expectsSingleFileHtml) {
         pass("public/styles.css is ignored for single-file HTML verification unless the root page references it.");
-      } else if (expectsNavigation) {
+      } else if (expectsRootStaticAssets && expectsNavigation) {
         check(/(?:\.[\w-]*active[\w-]*|\[aria-current(?:=["']page["'])?\])/.test(css), "CSS defines an active navigation state.");
         check(/@media\b/.test(css), "CSS includes responsive behavior.");
-      } else {
+      } else if (expectsRootStaticAssets) {
         check(/@media\b/.test(css), "CSS includes responsive behavior.");
       }
     }
@@ -1908,7 +1914,7 @@ export async function runStructuralVerification(input: {
       pass("public/script.js exists.");
       if (expectsSingleFileHtml) {
         pass("public/script.js is ignored for single-file HTML verification unless the root page references it.");
-      } else if (expectsNavigation) {
+      } else if (expectsRootStaticAssets && expectsNavigation) {
         check(/window\.location\.pathname/.test(script), "Script reads window.location.pathname.");
         check(/aria-current/.test(script), "Script manages aria-current.");
         check(/classList/.test(script), "Script manages the active class.");
@@ -1917,20 +1923,20 @@ export async function runStructuralVerification(input: {
   }
 
   if ((decision === null || decision.stack === "static-html") && !hasNodeServerSurface && hasRootStaticHtml && !rootHtmlIsBundlerEntry) {
-      const html = await readTextIfExists(path.join(workspacePath, "index.html"));
-      const css = await readTextIfExists(path.join(workspacePath, "styles.css"));
-      if (html === null) {
-        fail("index.html exists for the static app.");
-      } else {
-        pass("index.html exists for the static app.");
-        const referencesStyles = includesRootAssetReference(html, "href", "/styles.css");
-        if (expectsSingleFileHtml) {
-          check(!referencesStyles, "index.html does not reference styles.css because the request asks for a single-file HTML result.");
-        } else {
+    const html = await readTextIfExists(path.join(workspacePath, "index.html"));
+    const css = await readTextIfExists(path.join(workspacePath, "styles.css"));
+    if (html === null) {
+      fail("index.html exists for the static app.");
+    } else {
+      pass("index.html exists for the static app.");
+      const referencesStyles = includesRootAssetReference(html, "href", "/styles.css");
+      if (expectsSingleFileHtml) {
+        check(!referencesStyles, "index.html does not reference styles.css because the request asks for a single-file HTML result.");
+      } else if (expectsRootStaticAssets) {
         check(referencesStyles, "index.html references styles.css.");
       }
     }
-    if (!expectsSingleFileHtml) {
+    if (expectsRootStaticAssets) {
       check(css !== null, "styles.css exists for the static app.");
     } else if (css !== null) {
       pass("styles.css is ignored for single-file HTML verification unless index.html references it.");
@@ -2729,12 +2735,14 @@ async function executeVerificationInternal(workSession: WorkSessionRecord, progr
     await runRequestIntentVerification({
       workspacePath: workSession.activeWorktreePath,
       userRequest: workSession.lastUserMessage,
+      deliveryContract: progress?.deliveryContract ?? null,
     }),
     await runStructuralVerification({
       workspacePath: workSession.activeWorktreePath,
       packageJson,
       userRequest: workSession.lastUserMessage,
       stackDecision: workSession.stackDecision ?? null,
+      deliveryContract: progress?.deliveryContract ?? null,
     }),
   ].filter((check): check is { failed: boolean; output: string; checks: VerificationCheck[] } => check !== null);
   for (const preflightCheck of preflightChecks) {

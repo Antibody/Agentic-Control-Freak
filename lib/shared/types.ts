@@ -829,6 +829,50 @@ export interface PlanJson {
   workspace?: JsonObject;
 }
 
+export type DeliveryArtifactShape =
+  | "single-file-html"
+  | "root-html-css-js"
+  | "bundled-browser-app"
+  | "server-app"
+  | "script-or-report"
+  | "ml-training-bundle"
+  | "unknown";
+
+export type DeliveryAssetMode = "inline" | "local-file" | "bundled" | "none" | "unknown";
+export type DeliveryPolicyMode = "forbidden" | "allowed" | "unknown";
+export type DeliverySnapshotNetworkPolicy = "same-origin-only" | "open" | "unknown";
+
+export interface DeliveryContract {
+  schemaVersion: 1;
+  stack: ProjectStack;
+  productShape: string;
+  artifactShape: DeliveryArtifactShape;
+  entrypoints: string[];
+  requiredFiles: string[];
+  forbiddenFiles: string[];
+  assetPolicy: {
+    css: DeliveryAssetMode;
+    js: DeliveryAssetMode;
+    images: DeliveryAssetMode | "local-files" | "remote-allowed";
+  };
+  dependencyPolicy: {
+    externalRuntimeNetwork: DeliveryPolicyMode;
+    cdnRuntimeImports: DeliveryPolicyMode;
+    packageInstall: DeliveryPolicyMode;
+    vendoredLibraries: DeliveryPolicyMode;
+  };
+  renderPolicy: {
+    snapshotNetwork: DeliverySnapshotNetworkPolicy;
+    requiresCanvasNonBlank: boolean;
+    requiresWebGLFallback: boolean;
+  };
+  acceptanceAnchors: {
+    quotedTerms: string[];
+    requiredConcepts: string[];
+  };
+  rationale: string;
+}
+
 export interface PlanRecord {
   id: Identifier;
   workSessionId: Identifier;
@@ -838,6 +882,7 @@ export interface PlanRecord {
   status: PlanStatus;
   planMarkdown: string;
   planJson: PlanJson;
+  deliveryContract: DeliveryContract | null;
   createdByAgent: string;
   createdAt: string;
   approvedAt: string | null;

@@ -72,6 +72,7 @@ import { stackCapabilities } from "@/lib/shared/stack-capabilities";
 import { bootstrapWorkspaceIfNeeded, rescaffoldWorkspaceForStack } from "@/lib/server/workspace-bootstrap";
 import { isAllowedTargetStack } from "@/lib/shared/stack-catalog";
 import { createActiveHistoryFilter } from "@/lib/shared/history";
+import { deriveDeliveryContract, effectiveDeliveryContract, renderDeliveryContractForPrompt } from "@/lib/shared/delivery-contract";
 import { ensureWorkspaceAgentsMd } from "@/lib/server/runtime/agents-md";
 import { decideVerificationTransition } from "@/lib/server/workflow-transitions";
 import { assertSafeWorkspace, inspectWorkspaceSafety } from "@/lib/server/workspace-safety";
@@ -83,6 +84,7 @@ import type {
   ChatSessionRecord,
   CheckpointRecord,
   CodeChangeRecord,
+  DeliveryContract,
   Identifier,
   JsonObject,
   PlanJson,
@@ -1186,6 +1188,52 @@ function failureFingerprint(input: { commands: string[]; summary: string; rawOut
   return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
 }
 
+function failureOnlyVerificationText(rawOutput: string): string {
+  const failedLines = rawOutput
+    .split("\n")
+    .filter((line) => /^FAILED?\b|^-\s+|^FAIL\b/i.test(line.trim()));
+  return failedLines.length > 0 ? failedLines.join("\n") : rawOutput;
+}
+
+function demandedForbiddenFileFromVerifier(rawOutput: string, forbiddenFiles: string[]): string | undefined {
+  const lines = rawOutput.split("\n");
+  return forbiddenFiles.find((file) => {
+    const escaped = file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existsPattern = new RegExp(`${escaped}\\s+exists\\b`, "i");
+    const referencePattern = new RegExp(`\\breferences\\s+(?:\\\\/|/)?${escaped}\\b`, "i");
+    return lines.some((line) => {
+      if (new RegExp(`does\\s+not\\s+reference\\s+(?:\\\\/|/)?${escaped}\\b`, "i").test(line)) {
+        return false;
+      }
+      return existsPattern.test(line) || referencePattern.test(line);
+    });
+  });
+}
+
+function reconcileVerificationWithDeliveryContract(input: {
+  verification: VerificationRunRecord;
+  deliveryContract: DeliveryContract;
+}): { action: "repair_code" | "block_contract_conflict"; reason: string } {
+  const rawOutput = failureOnlyVerificationText(input.verification.rawOutput);
+  const contract = input.deliveryContract;
+  if (contract.artifactShape === "single-file-html") {
+    const demandedForbiddenFile = demandedForbiddenFileFromVerifier(rawOutput, contract.forbiddenFiles);
+    if (demandedForbiddenFile !== undefined) {
+      return {
+        action: "block_contract_conflict",
+        reason: `Verification output appears to demand ${demandedForbiddenFile}, but the approved delivery contract is single-file HTML and forbids that file.`,
+      };
+    }
+  }
+  if (contract.artifactShape === "root-html-css-js" && /single-file html|single html file|one html file/i.test(rawOutput)) {
+    return {
+      action: "block_contract_conflict",
+      reason: "Verification output appears to require a single-file HTML result, but the approved delivery contract is root index.html with local CSS/JS assets.",
+    };
+  }
+  return { action: "repair_code", reason: "Verification output is compatible with the approved delivery contract." };
+}
+
 function recentChangesForSession(db: AppDatabase, workSessionId: Identifier): CodeChangeRecord[] {
   const workSession = db.workSessions.find((candidate) => candidate.id === workSessionId);
   const inHistory = createActiveHistoryFilter(workSession, db.checkpoints);
@@ -1442,6 +1490,7 @@ async function createVerificationRepairTask(input: {
   plan: PlanRecord;
   verification: VerificationRunRecord;
   fingerprint: string;
+  deliveryContract: DeliveryContract;
 }): Promise<TaskRecord> {
   return mutateDatabase((db) => {
     const tasks = tasksForPlan(db, input.plan.id);
@@ -1487,7 +1536,12 @@ ${previewRuntimeLogEvidence(runtimeLogPreview)}`
     const failingCommandSection = failingCommandOutput.length > 0
       ? `Failing command output (this is the actual error the gate saw — diagnose and fix from here; the required change is often stated in the message itself):\n${failingCommandOutput}\n\n`
       : "";
+    const contractBlock = renderDeliveryContractForPrompt(input.deliveryContract);
     const description = `Repair the failed verification run and keep the fix scoped to the current plan.
+
+${contractBlock}
+
+The delivery contract is authoritative. Do not satisfy a generic scaffold convention when it contradicts the delivery contract.
 
 Failure kind: ${input.verification.failureKind}
 
@@ -1854,6 +1908,11 @@ async function createPlan(workSession: WorkSessionRecord): Promise<PlanRecord> {
     imagePaths,
   });
   assertPlanTargetsStayInsideWorkspace(workSession, generated.planJson);
+  const deliveryContract = deriveDeliveryContract({
+    userRequest,
+    planJson: generated.planJson,
+    stackDecision: workSession.stackDecision ?? null,
+  });
   const { plan, decisionBeforePlan, sessionAfterPlan } = await mutateDatabase((db) => {
     const version = db.plans.filter((candidate) => candidate.workSessionId === workSession.id).length + 1;
     const record = createPlanRecord({
@@ -1871,6 +1930,7 @@ async function createPlan(workSession: WorkSessionRecord): Promise<PlanRecord> {
           priorResearchArtifactPath: researchContext?.artifactUri ?? null,
         },
       },
+      deliveryContract,
       createdByAgent: generated.createdByAgent,
       approvedAt: null,
       approvalCheckpointId: null,
@@ -2602,12 +2662,19 @@ async function runVerificationForSession(workSession: WorkSessionRecord, plan: P
     context: { planId: plan?.id, verificationRunId: started.id },
   });
 
+  const deliveryContract = effectiveDeliveryContract({
+    planContract: plan?.deliveryContract ?? null,
+    userRequest: workSession.lastUserMessage,
+    planJson: plan?.planJson ?? null,
+    stackDecision: workSession.stackDecision ?? null,
+  });
   const result = await executeVerification(
     workSession,
     {
       workSessionId: workSession.id,
       verificationRunId: started.id,
       planId: plan?.id,
+      deliveryContract,
     },
     signal
   );
@@ -4536,11 +4603,42 @@ export async function advanceController(
 
         if (transition.sideEffectIntent === "create_repair_task") {
           await throwIfWorkSessionCanceled(workSessionId);
+          const deliveryContract = effectiveDeliveryContract({
+            planContract: snapshot.plan.deliveryContract ?? null,
+            userRequest: snapshot.workSession.lastUserMessage,
+            planJson: snapshot.plan.planJson,
+            stackDecision: snapshot.workSession.stackDecision ?? null,
+          });
+          const reconciliation = reconcileVerificationWithDeliveryContract({ verification, deliveryContract });
+          if (reconciliation.action === "block_contract_conflict") {
+            await transitionWorkSession(workSessionId, "blocked");
+            await createHandoff(workSessionId, `${reconciliation.reason} Automatic code repair was stopped because the verifier and approved delivery contract disagree. Summary: ${verification.summary}`);
+            await emitEvent({
+              workSessionId,
+              eventName: "session.blocked",
+              aggregateType: "work_session",
+              aggregateId: workSessionId,
+              payload: {
+                reason: reconciliation.reason,
+                verificationRunId: verification.id,
+                failureKind: "verification_contract_failure",
+                artifactShape: deliveryContract.artifactShape,
+              },
+              priority: "high",
+              producer: { module: "workflow-controller" },
+              context: { planId: snapshot.plan.id, verificationRunId: verification.id },
+            });
+            await addAssistantMessage(chatSessionId, `Verification could not be repaired automatically. ${reconciliation.reason}`);
+            steps.push("verification-contract-conflict-blocked");
+            currentState = "blocked";
+            break;
+          }
           const repairTask = await createVerificationRepairTask({
             workSessionId,
             plan: snapshot.plan,
             verification,
             fingerprint,
+            deliveryContract,
           });
           await emitEvent({
             workSessionId,

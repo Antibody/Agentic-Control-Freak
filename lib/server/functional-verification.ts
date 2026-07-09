@@ -327,6 +327,10 @@ function result(input: {
   };
 }
 
+function snapshotPolicyBlockedRequests(networkErrors: string[]): string[] {
+  return networkErrors.filter((entry) => /blocked by snapshot network policy/i.test(entry));
+}
+
 export async function runFunctionalVerification(input: {
   workSession: WorkSessionRecord;
   preview: PreviewServerRecord | null;
@@ -428,13 +432,17 @@ export async function runFunctionalVerification(input: {
         badResponses: inspection.badResponses.length,
       };
   const signalFailures = signalCounts.consoleErrors + signalCounts.pageErrors + signalCounts.networkErrors + signalCounts.badResponses;
+  const blockedBySnapshotPolicy = snapshotPolicyBlockedRequests(inspection.networkErrors);
+  const routeFailureNote = blockedBySnapshotPolicy.length > 0
+    ? `Runtime root route attempted external requests blocked by snapshot network policy: ${blockedBySnapshotPolicy.slice(0, 3).join(" | ")}. Replace CDN-only/runtime-network dependencies with same-origin bundled, vendored, or fallback execution before changing unrelated UI.`
+    : `Runtime root route had rendered-output issues. textLength=${textLength}; browserSignalFailures=${signalFailures}.`;
   const routeSpec = specs.find((spec) => spec.id === "runtime-route:/") ?? specs[0];
   const routeResult = result({
     spec: routeSpec,
     passed: textLength > 0 && signalFailures === 0,
     note: textLength > 0 && signalFailures === 0
       ? `Runtime root route rendered ${textLength} visible text characters without browser errors.`
-      : `Runtime root route had rendered-output issues. textLength=${textLength}; browserSignalFailures=${signalFailures}.`,
+      : routeFailureNote,
     observed: {
       route: "/",
       textLength,
